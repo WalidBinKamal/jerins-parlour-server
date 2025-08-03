@@ -79,6 +79,21 @@ async function run() {
             res.send(result)
         })
 
+        // user related apis
+        app.get('/users/:email', verifyToken, async (req, res) => {
+            const email = req.params.email
+            const query = { email: email }
+            const result = await userCollection.findOne(query)
+            if (!result) {
+                return res.status(404).json({ error: "User not found" });
+            }
+            if (email !== req.user.email) {
+                return res.status(403).json({ error: "Forbidden Access" });
+            }
+            const { hashedPassword, ...user } = result
+            res.send(user)
+        })
+
         // Auth related apis
         // registration
         app.post('/api/auth/register', async (req, res) => {
@@ -109,12 +124,12 @@ async function run() {
             if (!user) {
                 return res.status(400).send({ message: "Invalid email or password" })
             }
-            
+
             const isMatch = await bcrypt.compare(password, user.hashedPassword)
             if (!isMatch) {
                 return res.status(400).send({ message: "Invalid email or password" })
             }
-             
+
             const token = createToken(email)
             res.cookie("token", token, {
                 httpOnly: true,
