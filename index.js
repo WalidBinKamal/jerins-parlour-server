@@ -1,6 +1,6 @@
 require('dotenv').config()
 const express = require('express')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
@@ -66,10 +66,24 @@ async function run() {
         const serviceCollection = client.db("parlourDB").collection("services")
         const reviewCollection = client.db("parlourDB").collection("reviews")
         const userCollection = client.db("parlourDB").collection("users")
+        const bookingCollection = client.db("parlourDB").collection("bookings")
 
         // Services related apis
         app.get('/services', async (req, res) => {
             const result = await serviceCollection.find().toArray()
+            res.send(result)
+        })
+        app.get('/service/:id', verifyToken, async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await serviceCollection.findOne(query)
+            res.send(result)
+        })
+
+        // booking realted apis
+        app.post('/booking', verifyToken, async (req, res) => {
+            const data = req.body
+            const result = await bookingCollection.insertOne(data)
             res.send(result)
         })
 
