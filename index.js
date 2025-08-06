@@ -86,10 +86,21 @@ async function run() {
             const result = await bookingCollection.insertOne(data)
             res.send(result)
         })
+        app.get('/booking/:email', verifyToken, async (req, res) => {
+            const email = req.params.email
+            const query = { email: email }
+            const result = await bookingCollection.find(query).toArray()
+            res.send(result)
+        })
 
         // Review related apis
         app.get('/reviews', async (req, res) => {
             const result = await reviewCollection.find().toArray()
+            res.send(result)
+        })
+        app.post('/reviews', verifyToken, async (req, res) => {
+            const data = req.body
+            const result = await reviewCollection.insertOne(data)
             res.send(result)
         })
 
