@@ -119,6 +119,48 @@ async function run() {
             res.send(user)
         })
 
+        app.put('/users/:email', async (req, res) => {
+            const email = req.params.email;
+            const updateData = req.body;
+
+            const user = await userCollection.findOne({ email: email });
+
+            let body = {};
+
+            ['firstName', 'lastName', 'image'].forEach(field => {
+                if (
+                    updateData[field] !== undefined &&
+                    (!user || updateData[field] !== user[field])
+                ) {
+                    body[field] = updateData[field];
+                }
+            });
+
+            if (updateData.password && updateData.password.trim() !== '') {
+                const salt = await bcrypt.genSalt(10);
+                body.password = await bcrypt.hash(updateData.password, salt);
+            }
+
+            if (Object.keys(body).length === 0) {
+                return res.send({ message: 'No changes detected' });
+            }
+
+            const result = await userCollection.updateOne(
+                { email: email },
+                { $set: body },
+                { upsert: true }
+            );
+
+            // Add message property to result for client readability
+            if (result.upsertedCount > 0) {
+                result.message = 'User created successfully';
+            } else {
+                result.message = 'User updated successfully';
+            }
+
+            res.send(result);
+        });
+
         // Auth related apis
         // registration
         app.post('/api/auth/register', async (req, res) => {
