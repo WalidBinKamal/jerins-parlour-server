@@ -73,7 +73,7 @@ async function run() {
             const result = await serviceCollection.find().toArray()
             res.send(result)
         })
-        app.get('/service/:id', verifyToken, async (req, res) => {
+        app.get('/services/:id', verifyToken, async (req, res) => {
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
             const result = await serviceCollection.findOne(query)
@@ -138,7 +138,7 @@ async function run() {
 
             if (updateData.password && updateData.password.trim() !== '') {
                 const salt = await bcrypt.genSalt(10);
-                body.password = await bcrypt.hash(updateData.password, salt);
+                body.hashedPassword = await bcrypt.hash(updateData.password, salt);
             }
 
             if (Object.keys(body).length === 0) {
@@ -150,7 +150,7 @@ async function run() {
                 { $set: body },
                 { upsert: true }
             );
-
+            // console.log(body)
             // Add message property to result for client readability
             if (result.upsertedCount > 0) {
                 result.message = 'User created successfully';
@@ -160,6 +160,20 @@ async function run() {
 
             res.send(result);
         });
+
+        app.get('/users/admin/:email', verifyToken, async (req, res) => {
+            const email = req.params.email
+            if (email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden Access' })
+            }
+            const query = { email }
+            const user = await userCollection.findOne(query)
+            let admin = false
+            if (user) {
+                admin = user?.role === 'admin'
+            }
+            res.send({ admin })
+        })
 
         // Auth related apis
         // registration
