@@ -34,27 +34,6 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
-
-// function to create token
-const createToken = (email) => {
-    return jwt.sign({ email }, jwtSecret, { expiresIn: "7d" })
-}
-
-// middleware to verify token
-const verifyToken = (req, res, next) => {
-    const token = req.cookies.token
-    if (!token) {
-        return res.status(401).send({ message: "Unauthorized" })
-    }
-    jwt.verify(token, jwtSecret, (err, decoded) => {
-        if (err) {
-            return res.status(401).send({ message: "Unauthorized" })
-        }
-        req.user = decoded
-        next()
-    })
-}
-
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -67,6 +46,38 @@ async function run() {
         const reviewCollection = client.db("parlourDB").collection("reviews")
         const userCollection = client.db("parlourDB").collection("users")
         const bookingCollection = client.db("parlourDB").collection("bookings")
+
+        // function to create token
+        const createToken = (email) => {
+            return jwt.sign({ email }, jwtSecret, { expiresIn: "7d" })
+        }
+
+        // middleware to verify token
+        const verifyToken = (req, res, next) => {
+            const token = req.cookies.token
+            if (!token) {
+                return res.status(401).send({ message: "Unauthorized" })
+            }
+            jwt.verify(token, jwtSecret, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: "Unauthorized" })
+                }
+                req.user = decoded
+                next()
+            })
+        }
+
+        // middleware to verify admin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.user.email
+            const query = { email: email }
+            const user = await userCollection.findOne(query)
+            const isAdmin = user?.role === "admin"
+            if (!isAdmin) {
+                return res.status(403).send({ message: "Forbidden Access" })
+            }
+            next()
+        }
 
         // Services related apis
         app.get('/services', async (req, res) => {
@@ -99,12 +110,16 @@ async function run() {
             res.send(result)
         })
         app.post('/reviews', verifyToken, async (req, res) => {
-            const data = req.body
+            const data = req.user.email
             const result = await reviewCollection.insertOne(data)
             res.send(result)
         })
 
         // user related apis
+        app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
+            const result = await userCollection.find().toArray()
+            res.send(result)
+        })
         app.get('/users/:email', verifyToken, async (req, res) => {
             const email = req.params.email
             const query = { email: email }
@@ -173,6 +188,58 @@ async function run() {
                 admin = user?.role === 'admin'
             }
             res.send({ admin })
+        })
+
+        // admin dashboard apis
+        // orderlist apis
+        app.get('/order-list', verifyToken, verifyAdmin, async (req, res) => {
+            const result = await bookingCollection.aggregate([
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "email",
+                        foreignField: "email",
+                        as: "orderInfo"
+                    }
+                },
+                {
+                    $unwind: "$orderInfo"
+                },
+                {
+                    $addFields: {
+                        fullName: {
+                            $concat: ["$orderInfo.firstName", " ", "$orderInfo.lastName"]
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        email: 1,
+                        serviceName: 1,
+                        fullName: 1,
+                        status: 1,
+                    }
+                }
+            ]).toArray()
+            res.send(result)
+        })
+        // booking status update
+        app.patch('/booking/:id', verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id
+            const { status } = req.body
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    status: status,
+                }
+            }
+            if (!status) {
+                return res.status(400).send({ message: "Status is required" })
+            }
+            const result = await bookingCollection.updateOne(filter, updatedDoc)
+            console.log(id, status, filter, result)
+            res.send(result)
         })
 
         // Auth related apis
